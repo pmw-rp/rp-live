@@ -1,0 +1,53 @@
+image:
+  repository: pmwrp/rp-live
+  tag: "0.0.36"
+
+source:
+  customer_id: # mandatory - same as client id
+  namespace: redpanda
+  # the redpanda pod prefix is the pod name without the hyphen or ordinal (so for the pod redpanda-0, the prefix is redpanda)
+  redpanda_pod_prefix: redpanda
+  kafka_port: 9093
+  admin_port: 9644
+#  sasl:
+#    enabled: true
+#    secret: source
+#  tls:
+#    enabled: true
+#    skip_cert_verify: true
+
+destination:
+  transport: kafka # kafka or http
+  seed_broker: "redpanda-0.o11y.cs.redpanda.com:9092" # or "https://redpanda-0.o11y.cs.redpanda.com:443"
+  logs_topic: logs
+  metrics_topic: metrics
+  secret: destination
+
+logs:
+  enabled: true
+  format: |
+    {
+      "redpanda_cluster_id": "meta.cluster_id",
+      "redpanda_node_id": "meta.node_id",
+      "customer_id": "meta.customer_id",
+      "redpanda_source": "'self_hosted'",
+      "timestamp": "unixTSMilli(toTS(line.timestamp, \"2006-01-02 15:04:05,000\", true))",
+      "stream": "'stderr'",
+      "_p": "'F'",
+      "log": "log",
+      "level": "line.level",
+      "kubernetes": {
+        "pod_name": "pod.metadata.name",
+        "namespace_name": "pod.metadata.namespace",
+        "pod_id": "pod.metadata.uid",
+        "labels": "pod.metadata.labels",
+        "host": "pod.spec.nodeName",
+        "container_name": "pod.spec.containers[0].name",
+        "docker_id": "pod.status.containerStatuses[1].containerID",
+        "container_hash": "pod.status.containerStatuses[1].imageID",
+        "container_image": "pod.status.containerStatuses[1].image"
+      }
+    }
+
+metrics:
+  enabled: true

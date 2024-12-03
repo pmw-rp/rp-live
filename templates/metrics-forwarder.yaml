@@ -1,0 +1,208 @@
+{{- if .Values.metrics.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: metrics-forwarder
+  namespace: {{ .Release.Namespace }}
+data:
+  metrics-forwarder.yaml: |-
+    http:
+      enabled: false
+      address: 0.0.0.0:4195
+      root_path: /rp-live
+      debug_endpoints: false
+
+    redpanda:
+      seed_brokers: [ {{- .Values.source.seed_broker | quote -}} ]
+      logs_level: info
+      rack_id: ""
+      timeout: 10s
+      max_message_bytes: 1MB
+      {{- if (.Values.source.sasl).enabled | default false }}
+      sasl:
+          - mechanism: ${SOURCE_MECHANISM}
+            username: ${SOURCE_USERNAME}
+            password: ${SOURCE_PASSWORD}
+      {{- end }}
+      {{- if (.Values.source.tls).enabled | default false }}
+      tls:
+      {{- toYaml .Values.source.tls | nindent 8 }}
+      {{- end }}
+
+    input:
+      label: "metrics_forwarder_pod_metrics_input"
+      broker_pod_metrics2:
+        customer_id: {{ .Values.source.customer_id }}
+        namespace: ${REDPANDA_NAMESPACE}
+        redpanda_pod_prefix: ${REDPANDA_POD_PREFIX}
+        forwarder_pod_name: ${FORWARDER_POD_NAME}
+        kafka_port: {{ .Values.source.kafka_port }}
+        admin_port: {{ .Values.source.admin_port }}
+        container: redpanda
+        {{- if (.Values.source.sasl).enabled | default false }}
+        sasl:
+          - mechanism: ${SOURCE_MECHANISM}
+            username: ${SOURCE_USERNAME}
+            password: ${SOURCE_PASSWORD}
+        {{- end }}
+        {{- if (.Values.source.tls).enabled | default false }}
+        tls:
+        {{- toYaml .Values.source.tls | nindent 10 }}
+        {{- end }}
+        metrics_endpoint: /public_metrics
+        labels:
+          container: "'redpanda'"
+          host: pod.spec.hostname
+          kubernetes_container_image: pod.spec.containers[0].image
+          kubernetes_container_name: pod.spec.containers[0].name
+          kubernetes_labels_app_kubernetes_io_component: pod.metadata.labels['app.kubernetes.io/component']
+          kubernetes_labels_app_kubernetes_io_instance: pod.metadata.labels['app.kubernetes.io/instance']
+          kubernetes_pod_id: pod.metadata.uid
+          kubernetes_pod_name: pod.metadata.name
+          namespace: pod.metadata.namespace
+          pod: pod.metadata.name
+          redpanda_id: meta.cluster_id
+          redpanda_node_id: meta.node_id
+          redpanda_source: "'self_hosted'"
+          customer_id: meta.customer_id
+    {{- if eq .Values.destination.transport "http" }}
+    pipeline:
+      processors:
+        - log_rest_processor:
+            key: ${! meta("customer_id")}-${! meta("redpanda_id")}-${! meta("redpanda_node_id")}
+            topic: metrics
+            max_http_request_bytes: 100000
+
+    output:
+      label: "logs_forwarder_kafka_output"
+      http_client:
+        url: {{ .Values.destination.seed_broker }}/topics/${! meta("topic") }
+        verb: POST
+        headers:
+          Content-Type: application/vnd.kafka.binary.v2+json
+        basic_auth:
+          enabled: true
+          username: ${TELEMETRY_USERNAME}
+          password: ${TELEMETRY_PASSWORD}
+    {{ end }}
+    {{- if eq .Values.destination.transport "kafka" }}
+    output:
+      kafka_franz:
+        seed_brokers: [ {{ .Values.destination.seed_broker }} ]
+        topic: metrics
+        client_id: ${TELEMETRY_CLIENT}
+        timeout: 10s
+        max_message_bytes: 1MB
+        compression: lz4
+        key: ${! meta("customer_id")}-${! meta("redpanda_id")}-${! meta("redpanda_node_id")}
+        batching:
+          byte_size: 1000000
+          count: 0
+          period: 10s
+        sasl:
+          - mechanism: ${TELEMETRY_MECHANISM}
+            username: ${TELEMETRY_USERNAME}
+            password: ${TELEMETRY_PASSWORD}
+        tls:
+          enabled: true
+    {{ end }}
+    {{- if eq .Values.destination.transport "experiment" }}
+    output:
+      kafka_rest:
+        baseurl: {{ .Values.destination.seed_broker }}
+        topic: metrics
+        key: ${! meta("customer_id")}-${! meta("redpanda_id")}-${! meta("redpanda_node_id")}
+        username: ${TELEMETRY_USERNAME}
+        password: ${TELEMETRY_PASSWORD}
+        timeout: 60s
+    {{ end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: metrics-forwarder
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: metrics-forwarder
+spec:
+  clusterIP: None
+  selector:
+    app: metrics-forwarder
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: metrics-forwarder
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: metrics-forwarder
+spec:
+  serviceName: "metrics-forwarder"
+  selector:
+    matchLabels:
+      app: metrics-forwarder
+  replicas: {{  ((lookup "apps/v1" "StatefulSet" .Values.source.namespace "redpanda").spec).replicas | default 1 }}
+  template:
+    metadata:
+      labels:
+        app: metrics-forwarder
+    spec:
+      containers:
+        - name: metrics-forwarder
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          command: ["/redpanda-connect", "run", "/config/metrics-forwarder.yaml"]
+          volumeMounts:
+            - name: metrics-forwarder
+              mountPath: /config
+          env:
+            - name: REDPANDA_NAMESPACE
+              value: {{ .Values.source.namespace }}
+            - name: REDPANDA_POD_PREFIX
+              value: {{ .Values.source.redpanda_pod_prefix}}
+            - name: FORWARDER_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: TELEMETRY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.destination.secret }}
+                  key: "password"
+            - name: TELEMETRY_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.destination.secret }}
+                  key: "username"
+            - name: TELEMETRY_MECHANISM
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.destination.secret }}
+                  key: "mechanism"
+            - name: TELEMETRY_CLIENT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.destination.secret }}
+                  key: "username"
+            {{- if (.Values.source.sasl).enabled | default false }}
+            - name: SOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.source.sasl.secret }}
+                  key: "password"
+            - name: SOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.source.sasl.secret }}
+                  key: "username"
+            - name: SOURCE_MECHANISM
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.source.sasl.secret }}
+                  key: "mechanism"
+            {{- end }}
+      volumes:
+        - name: metrics-forwarder
+          configMap:
+            name: metrics-forwarder
+      serviceAccountName: pod-log-reader
+{{- end }}
