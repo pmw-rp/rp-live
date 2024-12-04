@@ -9,6 +9,7 @@ source:
   redpanda_pod_prefix: redpanda
   kafka_port: 9093
   admin_port: 9644
+  container: redpanda
 #  sasl:
 #    enabled: true
 #    secret: source

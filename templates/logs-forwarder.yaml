@@ -38,7 +38,7 @@ data:
         forwarder_pod_name: ${FORWARDER_POD_NAME}
         kafka_port: {{ .Values.source.kafka_port }}
         admin_port: {{ .Values.source.admin_port }}
-        container: redpanda
+        container: {{ .Values.source.container }}
         {{- if (.Values.source.sasl).enabled | default false }}
         sasl:
           - mechanism: ${SOURCE_MECHANISM}
