@@ -59,7 +59,7 @@ data:
           kubernetes_labels_app_kubernetes_io_instance: pod.metadata.labels['app.kubernetes.io/instance']
           kubernetes_pod_id: pod.metadata.uid
           kubernetes_pod_name: pod.metadata.name
-          namespace: pod.metadata.namespace
+          kubernetes_namespace: pod.metadata.namespace
           pod: pod.metadata.name
           redpanda_id: meta.cluster_id
           redpanda_node_id: meta.node_id
