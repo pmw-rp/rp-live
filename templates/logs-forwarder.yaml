@@ -92,7 +92,7 @@ data:
             compression: lz4
             key: ${! meta("customer_id")}-${! meta("redpanda_id")}-${! meta("redpanda_node_id")}
             batching:
-              byte_size: 1000000
+              byte_size: 500000
               count: 0
               period: 10s
             sasl:
