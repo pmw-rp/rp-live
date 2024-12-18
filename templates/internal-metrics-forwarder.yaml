@@ -149,10 +149,10 @@ spec:
           resources:
             limits:
               cpu: "1"
-              memory: "{{.Values.source.memory.k8s}}Mi"
+              memory: "{{.Values.internal_metrics.memory.k8s}}Mi"
             requests:
               cpu: "1"
-              memory: "{{.Values.source.memory.k8s}}Mi"
+              memory: "{{.Values.internal_metrics.memory.k8s}}Mi"
           volumeMounts:
             - name: internal-metrics-forwarder
               mountPath: /config
@@ -160,7 +160,7 @@ spec:
             - name: GOGC
               value: "100"
             - name: GOMEMLIMIT
-              value: "{{ .Values.source.memory.go}}MiB"
+              value: "{{ .Values.internal_metrics.memory.go}}MiB"
             - name: REDPANDA_NAMESPACE
               value: {{ .Values.source.namespace }}
             - name: REDPANDA_POD_PREFIX

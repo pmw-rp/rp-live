@@ -3,9 +3,6 @@ image:
   tag: "0.0.36"
 
 source:
-  memory:
-    k8s: 2000
-    go: 1800
   customer_id: # mandatory - same as client id
   namespace: redpanda
   # the redpanda pod prefix is the pod name without the hyphen or ordinal (so for the pod redpanda-0, the prefix is redpanda)
@@ -29,6 +26,9 @@ destination:
 
 logs:
   enabled: true
+  memory:
+    k8s: 2000
+    go: 1800
   format: |
     {
       "redpanda_cluster_id": "meta.cluster_id",
@@ -55,3 +55,12 @@ logs:
 
 metrics:
   enabled: true
+  memory:
+    k8s: 2000
+    go: 1800
+
+internal_metrics:
+  enabled: true
+  memory:
+    k8s: 4000
+    go: 3800
