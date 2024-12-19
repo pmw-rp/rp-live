@@ -38,6 +38,7 @@ data:
         forwarder_pod_name: ${FORWARDER_POD_NAME}
         kafka_port: {{ .Values.source.kafka_port }}
         admin_port: {{ .Values.source.admin_port }}
+        scrape_interval: {{.Values.metrics.scrape_interval}}
         container: redpanda
         {{- if (.Values.source.sasl).enabled | default false }}
         sasl:
